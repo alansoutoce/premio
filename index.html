@@ -529,9 +529,9 @@
 
     <script>
         /* ============================================================
-           CONFIGURAÇÃO — ALTERE AQUI O CAMINHO DA PLANILHA
+           CONFIGURAÇÃO
            ============================================================ */
-        const ARQUIVO_PLANILHA = 'PREMIO.xlsx'; // Coloque o arquivo na raiz do repositório
+        const ARQUIVO_PLANILHA = 'PREMIO.xlsx';
 
         /* ============================================================
            VARIÁVEIS GLOBAIS
@@ -561,12 +561,10 @@
             return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 });
         }
 
-        /** Remove tudo que não é dígito */
         function apenasDigitos(v) {
             return String(v || '').replace(/\D/g, '');
         }
 
-        /** Formata CPF: 000.000.000-00 */
         function formatarCPF(v) {
             const d = apenasDigitos(v).slice(0, 11);
             if (d.length <= 3) return d;
@@ -575,7 +573,6 @@
             return d.replace(/(\d{3})(\d{3})(\d{3})(\d+)/, '$1.$2.$3-$4');
         }
 
-        /** Valida CPF (algoritmo oficial) */
         function validarCPF(cpf) {
             const d = apenasDigitos(cpf);
             if (d.length !== 11) return false;
@@ -596,7 +593,6 @@
             return true;
         }
 
-        /** Normaliza CPF para comparação: somente dígitos */
         function normalizarCPF(v) {
             return apenasDigitos(v);
         }
@@ -1018,9 +1014,9 @@
         }
 
         /* ============================================================
-           AUTENTICAÇÃO
+           NAVEGAÇÃO ENTRE TELAS
            ============================================================ */
-        function setLoading(msg) {
+        function setLoading() {
             document.getElementById('telaLogin').classList.add('hidden');
             document.getElementById('telaErro').classList.add('hidden');
             document.getElementById('telaRelatorio').classList.add('hidden');
@@ -1036,6 +1032,9 @@
             document.getElementById('erroMsg').textContent = msg;
         }
 
+        /* ============================================================
+           AUTENTICAÇÃO
+           ============================================================ */
         async function autenticar() {
             const input = document.getElementById('cpfInput');
             const erroEl = document.getElementById('loginError');
@@ -1061,10 +1060,8 @@
             setLoading();
 
             try {
-                // Carregar planilha (só na primeira vez)
                 await carregarPlanilha();
 
-                // Procurar colaborador pelo CPF
                 const colaborador = colaboradoresCompletos.find(c => c.cpf === cpfDigitado);
 
                 if (!colaborador) {
@@ -1072,7 +1069,6 @@
                     return;
                 }
 
-                // Sucesso — mostrar relatório
                 colaboradorAtual = colaborador;
                 mostrarRelatorio(colaborador);
 
@@ -1122,7 +1118,6 @@
             const retrab = colaborador.retrabalhoDescontado || { atividades: 0, pontosMeta: 0, descontados: 0 };
             const metaRef = colaborador.metaReferencia || det.metaReferencia;
 
-            // Header
             document.getElementById('userNome').textContent = colaborador.nome;
             document.getElementById('userSupervisor').textContent = 'Supervisor: ' + (colaborador.supervisor || 'Não alocado');
 
@@ -1130,7 +1125,6 @@
             badgeEl.textContent = colaborador.resultado;
             badgeEl.className = 'badge-result ' + statusBadgeClass(colaborador.resultado);
 
-            // Cards
             const cardRetrabalho = `
                 <div class="card">
                     <div class="card-header">
@@ -1236,7 +1230,6 @@
                 </div>
             `;
 
-            // Detalhamento
             let detalheHTML = '';
             if (colaborador.resultado === 'Premio' && det.nivel) {
                 const metaTotal = num(det.metaTotal);
@@ -1417,7 +1410,6 @@
                 ${detalheHTML}
             `;
 
-            // WhatsApp — só mostra se tiver número
             const btnWhats = document.getElementById('btnWhats');
             if (colaborador.whatsapp) {
                 btnWhats.style.display = 'inline-flex';
@@ -1434,15 +1426,24 @@
         }
 
         /* ============================================================
-           PDF
+           PDF — VERSÃO CORRIGIDA
            ============================================================ */
         function baixarPDF() {
-            if (!colaboradorAtual) return;
+            if (!colaboradorAtual) {
+                alert('Nenhum colaborador carregado.');
+                return;
+            }
             gerarPDF(colaboradorAtual);
         }
 
         function gerarPDF(colaborador) {
             try {
+                // Verifica se a lib carregou
+                if (!window.jspdf || !window.jspdf.jsPDF) {
+                    alert('Biblioteca de PDF ainda não carregou. Aguarde alguns segundos e tente novamente.');
+                    return;
+                }
+
                 const { jsPDF } = window.jspdf;
                 const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
@@ -1458,6 +1459,7 @@
                 const gap = 4;
                 const larguraCard = (larguraUtil - gap * 2) / 3;
 
+                // ===== CABEÇALHO =====
                 doc.setFillColor(26, 35, 126);
                 doc.rect(0, 0, pageWidth, 18, 'F');
                 doc.setTextColor(255, 255, 255);
@@ -1465,17 +1467,21 @@
                 doc.setFont("helvetica", "bold");
                 doc.text("RELATORIO DE DESEMPENHO", pageWidth / 2, 11, { align: "center" });
 
+                // ===== NOME =====
                 let y = 26;
                 doc.setTextColor(26, 35, 126);
                 doc.setFontSize(13);
                 doc.setFont("helvetica", "bold");
                 doc.text(String(colaborador.nome || ''), pageWidth / 2, y, { align: "center" });
+
                 y += 6;
 
+                // ===== BARRA SUPERVISOR / DATA =====
                 doc.setFillColor(248, 250, 255);
                 doc.setDrawColor(224, 231, 255);
                 doc.setLineWidth(0.2);
                 doc.roundedRect(margem, y, larguraUtil, 10, 2, 2, 'FD');
+
                 doc.setFontSize(9);
                 doc.setFont("helvetica", "normal");
                 doc.setTextColor(100, 116, 139);
@@ -1483,125 +1489,168 @@
                 doc.setFont("helvetica", "bold");
                 doc.setTextColor(26, 35, 126);
                 doc.text(String(colaborador.supervisor || 'Nao alocado'), margem + 25, y + 6.5);
+
                 doc.setFont("helvetica", "normal");
                 doc.setTextColor(100, 116, 139);
                 doc.text("Data:", pageWidth - margem - 30, y + 6.5);
                 doc.setFont("helvetica", "bold");
                 doc.setTextColor(26, 35, 126);
                 doc.text(String(dataAtual), pageWidth - margem - 20, y + 6.5);
+
                 y += 14;
 
+                // ===== TRÊS CARDS =====
                 const alturaCard = 32;
                 const x1 = margem;
                 const x2 = margem + larguraCard + gap;
                 const x3 = margem + (larguraCard + gap) * 2;
 
+                // --- CARD 1: RETRABALHO ---
                 doc.setFillColor(255, 255, 255);
                 doc.setDrawColor(224, 231, 255);
+                doc.setLineWidth(0.2);
                 doc.roundedRect(x1, y, larguraCard, alturaCard, 2, 2, 'FD');
+
                 doc.setFontSize(9);
                 doc.setFont("helvetica", "bold");
                 doc.setTextColor(26, 35, 126);
                 doc.text("RETRABALHO", x1 + 3, y + 5);
+
                 doc.setDrawColor(240, 243, 255);
                 doc.line(x1 + 3, y + 7, x1 + larguraCard - 3, y + 7);
+
                 const linhasRetrab = [
                     ["Indice", (num(colaborador.indice) * 100).toFixed(2) + "%"],
                     ["Pontos Meta", "< " + META_RETRABALHO + "% (" + retrab.pontosMeta.toFixed(2) + ")"],
                     ["Ativ. Retrab.", retrab.atividades.toFixed(2)],
                     ["Descontados", retrab.descontados.toFixed(2)]
                 ];
+
                 doc.setFontSize(7.5);
                 linhasRetrab.forEach((linha, i) => {
-                    const yL = y + 12 + i * 5;
-                    doc.setFont("helvetica", "normal"); doc.setTextColor(100, 116, 139);
-                    doc.text(linha[0], x1 + 3, yL);
+                    const yLinha = y + 12 + i * 5;
+                    doc.setFont("helvetica", "normal");
+                    doc.setTextColor(100, 116, 139);
+                    doc.text(linha[0], x1 + 3, yLinha);
+
                     doc.setFont("helvetica", "bold");
-                    doc.setTextColor(linha[0] === "Descontados" && retrab.descontados > 0 ? [198, 40, 40] : [26, 35, 126]);
-                    doc.text(linha[1], x1 + larguraCard - 3, yL, { align: "right" });
+                    if (linha[0] === "Descontados" && retrab.descontados > 0) {
+                        doc.setTextColor(198, 40, 40);
+                    } else {
+                        doc.setTextColor(26, 35, 126);
+                    }
+                    doc.text(linha[1], x1 + larguraCard - 3, yLinha, { align: "right" });
                 });
 
+                // --- CARD 2: PRODUÇÃO ---
                 doc.setFillColor(255, 255, 255);
                 doc.setDrawColor(224, 231, 255);
                 doc.roundedRect(x2, y, larguraCard, alturaCard, 2, 2, 'FD');
+
                 doc.setFontSize(9);
                 doc.setFont("helvetica", "bold");
                 doc.setTextColor(26, 35, 126);
                 doc.text("PRODUCAO", x2 + 3, y + 5);
+
                 doc.setDrawColor(240, 243, 255);
                 doc.line(x2 + 3, y + 7, x2 + larguraCard - 3, y + 7);
+
                 const linhasProd = [
                     ["Retirada", String(colaborador.retirada || '0')],
                     ["Instalacao", String(colaborador.instalacao || '0')],
                     ["Manutencao", String(colaborador.manutencao || '0')],
                     ["P.Total", String(colaborador.at || '0')]
                 ];
+
                 doc.setFontSize(7.5);
                 linhasProd.forEach((linha, i) => {
-                    const yL = y + 12 + i * 5;
-                    doc.setFont("helvetica", "normal"); doc.setTextColor(100, 116, 139);
-                    doc.text(linha[0], x2 + 3, yL);
-                    doc.setFont("helvetica", "bold"); doc.setTextColor(26, 35, 126);
-                    doc.text(linha[1], x2 + larguraCard - 3, yL, { align: "right" });
+                    const yLinha = y + 12 + i * 5;
+                    doc.setFont("helvetica", "normal");
+                    doc.setTextColor(100, 116, 139);
+                    doc.text(linha[0], x2 + 3, yLinha);
+                    doc.setFont("helvetica", "bold");
+                    doc.setTextColor(26, 35, 126);
+                    doc.text(linha[1], x2 + larguraCard - 3, yLinha, { align: "right" });
                 });
 
+                // --- CARD 3: RESULTADOS ---
                 doc.setFillColor(255, 255, 255);
                 doc.setDrawColor(224, 231, 255);
                 doc.roundedRect(x3, y, larguraCard, alturaCard, 2, 2, 'FD');
+
                 doc.setFontSize(9);
                 doc.setFont("helvetica", "bold");
                 doc.setTextColor(26, 35, 126);
                 doc.text("RESULTADOS", x3 + 3, y + 5);
+
                 doc.setDrawColor(240, 243, 255);
                 doc.line(x3 + 3, y + 7, x3 + larguraCard - 3, y + 7);
+
                 const linhasRes = [
                     ["P.Final", num(colaborador.pv).toFixed(2)],
                     ["Dias Trab.", String(colaborador.du || '0')],
                     ["Media", num(colaborador.med).toFixed(2)]
                 ];
+
                 doc.setFontSize(7.5);
                 linhasRes.forEach((linha, i) => {
-                    const yL = y + 12 + i * 5;
-                    doc.setFont("helvetica", "normal"); doc.setTextColor(100, 116, 139);
-                    doc.text(linha[0], x3 + 3, yL);
-                    doc.setFont("helvetica", "bold"); doc.setTextColor(26, 35, 126);
-                    doc.text(linha[1], x3 + larguraCard - 3, yL, { align: "right" });
+                    const yLinha = y + 12 + i * 5;
+                    doc.setFont("helvetica", "normal");
+                    doc.setTextColor(100, 116, 139);
+                    doc.text(linha[0], x3 + 3, yLinha);
+                    doc.setFont("helvetica", "bold");
+                    doc.setTextColor(26, 35, 126);
+                    doc.text(linha[1], x3 + larguraCard - 3, yLinha, { align: "right" });
                 });
 
                 y += alturaCard + 6;
 
+                // ===== CARD RESULTADO FINAL =====
                 doc.setFillColor(242, 245, 255);
                 doc.setDrawColor(26, 35, 126);
                 doc.setLineWidth(0.5);
                 doc.roundedRect(margem, y, larguraUtil, 18, 2, 2, 'FD');
+
                 doc.setFontSize(9);
                 doc.setFont("helvetica", "normal");
                 doc.setTextColor(100, 116, 139);
                 doc.text("Resultado:", margem + 5, y + 7);
+
                 doc.setFont("helvetica", "bold");
-                if (colaborador.resultado === 'Premio') doc.setTextColor(46, 125, 50);
-                else if (colaborador.resultado === 'Concessão') doc.setTextColor(230, 81, 0);
-                else doc.setTextColor(198, 40, 40);
+                if (colaborador.resultado === 'Premio') {
+                    doc.setTextColor(46, 125, 50);
+                } else if (colaborador.resultado === 'Concessão') {
+                    doc.setTextColor(230, 81, 0);
+                } else {
+                    doc.setTextColor(198, 40, 40);
+                }
                 doc.text(String(colaborador.resultado || '-'), margem + 5, y + 13);
 
                 doc.setFont("helvetica", "normal");
                 doc.setTextColor(100, 116, 139);
                 doc.text("Nivel:", pageWidth / 2 - 10, y + 7);
+
                 doc.setFont("helvetica", "bold");
                 doc.setTextColor(26, 35, 126);
                 doc.text(String(colaborador.nivelPremio === 'NENHUM' ? '-' : colaborador.nivelPremio), pageWidth / 2 - 10, y + 13);
+
                 y += 22;
 
+                // ===== DETALHAMENTO =====
                 if (colaborador.resultado === 'Premio' && det.nivel) {
                     const alturaDet = 42;
                     if (y + alturaDet > pageHeight - 15) { doc.addPage(); y = 15; }
+
                     doc.setFillColor(255, 248, 225);
                     doc.setDrawColor(255, 193, 7);
+                    doc.setLineWidth(0.4);
                     doc.roundedRect(margem, y, larguraUtil, alturaDet, 2, 2, 'FD');
+
                     doc.setFontSize(10);
                     doc.setFont("helvetica", "bold");
                     doc.setTextColor(184, 134, 11);
                     doc.text("DETALHAMENTO DO PREMIO", pageWidth / 2, y + 6, { align: "center" });
+
                     doc.setDrawColor(255, 193, 7);
                     doc.line(margem + 3, y + 8, margem + larguraUtil - 3, y + 8);
 
@@ -1611,57 +1660,79 @@
                     const diasDet = det.dias !== undefined ? det.dias : colaborador.du;
 
                     doc.setFontSize(8.5);
-                    doc.setFont("helvetica", "normal"); doc.setTextColor(100, 100, 100);
+                    doc.setFont("helvetica", "normal");
+                    doc.setTextColor(100, 100, 100);
                     doc.text("Nivel Atingido:", margem + 5, y + 14);
-                    doc.setFont("helvetica", "bold"); doc.setTextColor(26, 35, 126);
+                    doc.setFont("helvetica", "bold");
+                    doc.setTextColor(26, 35, 126);
                     doc.text(String(det.nivel), margem + 40, y + 14);
 
-                    doc.setFont("helvetica", "normal"); doc.setTextColor(100, 100, 100);
+                    doc.setFont("helvetica", "normal");
+                    doc.setTextColor(100, 100, 100);
                     doc.text("Dias Trabalhados:", margem + 5, y + 21);
-                    doc.setFont("helvetica", "bold"); doc.setTextColor(0, 0, 0);
+                    doc.setFont("helvetica", "bold");
+                    doc.setTextColor(0, 0, 0);
                     doc.text(String(diasDet), margem + 40, y + 21);
 
-                    doc.setFont("helvetica", "normal"); doc.setTextColor(100, 100, 100);
+                    doc.setFont("helvetica", "normal");
+                    doc.setTextColor(100, 100, 100);
                     doc.text("P. Final:", margem + 5, y + 28);
-                    doc.setFont("helvetica", "bold"); doc.setTextColor(0, 0, 0);
+                    doc.setFont("helvetica", "bold");
+                    doc.setTextColor(0, 0, 0);
                     doc.text(pontuacaoFinal.toFixed(2), margem + 40, y + 28);
 
-                    doc.setFont("helvetica", "normal"); doc.setTextColor(100, 100, 100);
+                    doc.setFont("helvetica", "normal");
+                    doc.setTextColor(100, 100, 100);
                     doc.text("Meta do Nivel:", pageWidth / 2 + 5, y + 14);
-                    doc.setFont("helvetica", "bold"); doc.setTextColor(0, 0, 0);
+                    doc.setFont("helvetica", "bold");
+                    doc.setTextColor(0, 0, 0);
                     doc.text(metaTotal.toFixed(2), pageWidth - margem - 5, y + 14, { align: "right" });
 
-                    doc.setFont("helvetica", "normal"); doc.setTextColor(100, 100, 100);
+                    doc.setFont("helvetica", "normal");
+                    doc.setTextColor(100, 100, 100);
                     doc.text("Meta Alcancada:", pageWidth / 2 + 5, y + 21);
-                    doc.setFont("helvetica", "bold"); doc.setTextColor(46, 125, 50);
+                    doc.setFont("helvetica", "bold");
+                    doc.setTextColor(46, 125, 50);
                     doc.text(pontuacaoFinal.toFixed(2) + " >= " + metaTotal.toFixed(2), pageWidth - margem - 5, y + 21, { align: "right" });
 
-                    doc.setFont("helvetica", "normal"); doc.setTextColor(100, 100, 100);
+                    doc.setFont("helvetica", "normal");
+                    doc.setTextColor(100, 100, 100);
                     doc.text("Pontos Extras:", pageWidth / 2 + 5, y + 28);
-                    doc.setFont("helvetica", "bold"); doc.setTextColor(46, 125, 50);
+                    doc.setFont("helvetica", "bold");
+                    doc.setTextColor(46, 125, 50);
                     doc.text(extras.toFixed(2), pageWidth - margem - 5, y + 28, { align: "right" });
 
                     doc.setFillColor(232, 245, 233);
                     doc.roundedRect(margem + 3, y + 33, larguraUtil - 6, 7, 1, 1, 'F');
-                    doc.setFont("helvetica", "bold"); doc.setTextColor(46, 125, 50);
+
+                    doc.setFont("helvetica", "bold");
+                    doc.setTextColor(46, 125, 50);
                     doc.setFontSize(9);
                     doc.text("META ALCANCADA COM SUCESSO", margem + 6, y + 38);
+
                     y += alturaDet + 5;
+
                 } else if (colaborador.resultado === 'Concessão') {
                     const isProporcional = det.tipoConcessao === 'instalacao_proporcional';
                     const nivelConcessao = colaborador.nivelPremio !== 'NENHUM' ? colaborador.nivelPremio : null;
                     const bateuMeta = det.bateuMeta || (nivelConcessao !== null);
+
                     let alturaConc = 38;
                     if (bateuMeta) alturaConc = 45;
                     else if (isProporcional) alturaConc = 55;
+
                     if (y + alturaConc > pageHeight - 15) { doc.addPage(); y = 15; }
+
                     doc.setFillColor(255, 243, 224);
                     doc.setDrawColor(255, 152, 0);
+                    doc.setLineWidth(0.4);
                     doc.roundedRect(margem, y, larguraUtil, alturaConc, 2, 2, 'FD');
+
                     doc.setFontSize(10);
                     doc.setFont("helvetica", "bold");
                     doc.setTextColor(230, 81, 0);
                     doc.text("DETALHAMENTO DA CONCESSAO", pageWidth / 2, y + 6, { align: "center" });
+
                     doc.setDrawColor(255, 152, 0);
                     doc.line(margem + 3, y + 8, margem + larguraUtil - 3, y + 8);
 
@@ -1671,146 +1742,218 @@
                         const diasDet = det.dias !== undefined ? det.dias : colaborador.du;
                         const extras = num(det.extras);
 
-                        doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.setTextColor(46, 125, 50);
+                        doc.setFontSize(9);
+                        doc.setFont("helvetica", "bold");
+                        doc.setTextColor(46, 125, 50);
                         doc.text("META ALCANCADA - NIVEL " + String(nivelConcessao), margem + 5, y + 14);
 
                         doc.setFontSize(8.5);
-                        doc.setFont("helvetica", "normal"); doc.setTextColor(100, 100, 100);
+                        doc.setFont("helvetica", "normal");
+                        doc.setTextColor(100, 100, 100);
                         doc.text("Dias Trabalhados:", margem + 5, y + 21);
-                        doc.setFont("helvetica", "bold"); doc.setTextColor(0, 0, 0);
+                        doc.setFont("helvetica", "bold");
+                        doc.setTextColor(0, 0, 0);
                         doc.text(String(diasDet), margem + 40, y + 21);
 
-                        doc.setFont("helvetica", "normal"); doc.setTextColor(100, 100, 100);
+                        doc.setFont("helvetica", "normal");
+                        doc.setTextColor(100, 100, 100);
                         doc.text("P. Final:", margem + 5, y + 28);
-                        doc.setFont("helvetica", "bold"); doc.setTextColor(0, 0, 0);
+                        doc.setFont("helvetica", "bold");
+                        doc.setTextColor(0, 0, 0);
                         doc.text(pontuacaoFinal.toFixed(2), margem + 40, y + 28);
 
-                        doc.setFont("helvetica", "normal"); doc.setTextColor(100, 100, 100);
+                        doc.setFont("helvetica", "normal");
+                        doc.setTextColor(100, 100, 100);
                         doc.text("Meta do Nivel:", pageWidth / 2 + 5, y + 21);
-                        doc.setFont("helvetica", "bold"); doc.setTextColor(0, 0, 0);
+                        doc.setFont("helvetica", "bold");
+                        doc.setTextColor(0, 0, 0);
                         doc.text(metaTotal.toFixed(2), pageWidth - margem - 5, y + 21, { align: "right" });
 
-                        doc.setFont("helvetica", "normal"); doc.setTextColor(100, 100, 100);
+                        doc.setFont("helvetica", "normal");
+                        doc.setTextColor(100, 100, 100);
                         doc.text("Pontos Extras:", pageWidth / 2 + 5, y + 28);
-                        doc.setFont("helvetica", "bold"); doc.setTextColor(46, 125, 50);
+                        doc.setFont("helvetica", "bold");
+                        doc.setTextColor(46, 125, 50);
                         doc.text(extras.toFixed(2), pageWidth - margem - 5, y + 28, { align: "right" });
 
                         doc.setFillColor(232, 245, 233);
                         doc.roundedRect(margem + 3, y + 34, larguraUtil - 6, 8, 1, 1, 'F');
-                        doc.setFont("helvetica", "bold"); doc.setTextColor(46, 125, 50);
+                        doc.setFont("helvetica", "bold");
+                        doc.setTextColor(46, 125, 50);
                         doc.setFontSize(9);
                         doc.text("VALOR CONCEDIDO - NIVEL ALCANCADO", margem + 6, y + 39);
-                        doc.setFontSize(7.5); doc.setFont("helvetica", "normal");
+                        doc.setFontSize(7.5);
+                        doc.setFont("helvetica", "normal");
                         doc.text(String(nivelConcessao), pageWidth - margem - 6, y + 39, { align: "right" });
+
                     } else if (isProporcional) {
                         const pontosValidos = num(det.pontosValidos);
                         const valorPorPonto = num(det.valorPorPonto, VALOR_CONCESSAO_INSTALACAO);
 
-                        doc.setFontSize(8.5); doc.setFont("helvetica", "italic"); doc.setTextColor(120, 80, 0);
+                        doc.setFontSize(8.5);
+                        doc.setFont("helvetica", "italic");
+                        doc.setTextColor(120, 80, 0);
                         doc.text("Meta nao alcancada - concedido por ter ficado muito perto", margem + 5, y + 13);
 
-                        doc.setFont("helvetica", "normal"); doc.setTextColor(100, 100, 100);
+                        doc.setFont("helvetica", "normal");
+                        doc.setTextColor(100, 100, 100);
                         doc.text("Dias Trabalhados:", margem + 5, y + 20);
-                        doc.setFont("helvetica", "bold"); doc.setTextColor(0, 0, 0);
+                        doc.setFont("helvetica", "bold");
+                        doc.setTextColor(0, 0, 0);
                         doc.text(String(colaborador.du || '0'), margem + 40, y + 20);
 
-                        doc.setFont("helvetica", "normal"); doc.setTextColor(100, 100, 100);
+                        doc.setFont("helvetica", "normal");
+                        doc.setTextColor(100, 100, 100);
                         doc.text("P. Final:", margem + 5, y + 26);
-                        doc.setFont("helvetica", "bold"); doc.setTextColor(0, 0, 0);
+                        doc.setFont("helvetica", "bold");
+                        doc.setTextColor(0, 0, 0);
                         doc.text(num(colaborador.pv).toFixed(2), margem + 40, y + 26);
 
-                        doc.setFont("helvetica", "normal"); doc.setTextColor(100, 100, 100);
+                        doc.setFont("helvetica", "normal");
+                        doc.setTextColor(100, 100, 100);
                         doc.text("Nivel Referencia:", pageWidth / 2 + 5, y + 20);
-                        doc.setFont("helvetica", "bold"); doc.setTextColor(0, 0, 0);
+                        doc.setFont("helvetica", "bold");
+                        doc.setTextColor(0, 0, 0);
                         doc.text(String(nivelConcessao || '-'), pageWidth - margem - 5, y + 20, { align: "right" });
 
-                        doc.setFont("helvetica", "normal"); doc.setTextColor(100, 100, 100);
+                        doc.setFont("helvetica", "normal");
+                        doc.setTextColor(100, 100, 100);
                         doc.text("Pontos Validos:", pageWidth / 2 + 5, y + 26);
-                        doc.setFont("helvetica", "bold"); doc.setTextColor(0, 0, 0);
+                        doc.setFont("helvetica", "bold");
+                        doc.setTextColor(0, 0, 0);
                         doc.text(pontosValidos.toFixed(2), pageWidth - margem - 5, y + 26, { align: "right" });
 
-                        doc.setFont("helvetica", "normal"); doc.setTextColor(100, 100, 100);
+                        doc.setFont("helvetica", "normal");
+                        doc.setTextColor(100, 100, 100);
                         doc.text("Valor por Ponto:", pageWidth / 2 + 5, y + 32);
-                        doc.setFont("helvetica", "bold"); doc.setTextColor(0, 0, 0);
+                        doc.setFont("helvetica", "bold");
+                        doc.setTextColor(0, 0, 0);
                         doc.text("R$ " + valorPorPonto.toFixed(2), pageWidth - margem - 5, y + 32, { align: "right" });
 
                         doc.setFillColor(255, 224, 178);
                         doc.roundedRect(margem + 3, y + 42, larguraUtil - 6, 8, 1, 1, 'F');
-                        doc.setFont("helvetica", "bold"); doc.setTextColor(230, 81, 0);
+                        doc.setFont("helvetica", "bold");
+                        doc.setTextColor(230, 81, 0);
                         doc.setFontSize(9);
                         doc.text("VALOR DA CONCESSAO PROPORCIONAL", margem + 6, y + 47);
-                        doc.setFontSize(7.5); doc.setFont("helvetica", "normal");
+                        doc.setFontSize(7.5);
+                        doc.setFont("helvetica", "normal");
                         doc.text(pontosValidos.toFixed(2) + " pts x R$ " + valorPorPonto.toFixed(2), pageWidth - margem - 6, y + 47, { align: "right" });
+
                     } else {
-                        doc.setFontSize(8.5); doc.setFont("helvetica", "normal"); doc.setTextColor(100, 100, 100);
+                        doc.setFontSize(8.5);
+                        doc.setFont("helvetica", "normal");
+                        doc.setTextColor(100, 100, 100);
                         doc.text("Dias Trabalhados:", margem + 5, y + 14);
-                        doc.setFont("helvetica", "bold"); doc.setTextColor(0, 0, 0);
+                        doc.setFont("helvetica", "bold");
+                        doc.setTextColor(0, 0, 0);
                         doc.text(String(colaborador.du || '0'), margem + 40, y + 14);
-                        doc.setFont("helvetica", "normal"); doc.setTextColor(100, 100, 100);
+
+                        doc.setFont("helvetica", "normal");
+                        doc.setTextColor(100, 100, 100);
                         doc.text("P. Final:", margem + 5, y + 21);
-                        doc.setFont("helvetica", "bold"); doc.setTextColor(0, 0, 0);
+                        doc.setFont("helvetica", "bold");
+                        doc.setTextColor(0, 0, 0);
                         doc.text(num(colaborador.pv).toFixed(2), margem + 40, y + 21);
-                        doc.setFont("helvetica", "normal"); doc.setTextColor(100, 100, 100);
+
+                        doc.setFont("helvetica", "normal");
+                        doc.setTextColor(100, 100, 100);
                         doc.text("Nivel Referencia:", pageWidth / 2 + 5, y + 14);
-                        doc.setFont("helvetica", "bold"); doc.setTextColor(0, 0, 0);
+                        doc.setFont("helvetica", "bold");
+                        doc.setTextColor(0, 0, 0);
                         doc.text(String(nivelConcessao || '-'), pageWidth - margem - 5, y + 14, { align: "right" });
+
                         doc.setFillColor(255, 224, 178);
                         doc.roundedRect(margem + 3, y + 28, larguraUtil - 6, 7, 1, 1, 'F');
-                        doc.setFont("helvetica", "bold"); doc.setTextColor(230, 81, 0);
+                        doc.setFont("helvetica", "bold");
+                        doc.setTextColor(230, 81, 0);
                         doc.setFontSize(9);
                         doc.text("VALOR CONCEDIDO CONFORME PLANILHA", margem + 6, y + 33);
                     }
+
                     y += alturaConc + 5;
+
                 } else {
                     const alturaNao = metaRef ? 45 : 20;
                     if (y + alturaNao > pageHeight - 15) { doc.addPage(); y = 15; }
+
                     doc.setFillColor(255, 235, 238);
                     doc.setDrawColor(198, 40, 40);
+                    doc.setLineWidth(0.4);
                     doc.roundedRect(margem, y, larguraUtil, alturaNao, 2, 2, 'FD');
-                    doc.setFontSize(10); doc.setFont("helvetica", "bold"); doc.setTextColor(198, 40, 40);
+
+                    doc.setFontSize(10);
+                    doc.setFont("helvetica", "bold");
+                    doc.setTextColor(198, 40, 40);
                     doc.text("PREMIO NAO ATINGIDO", pageWidth / 2, y + 6, { align: "center" });
+
                     doc.setDrawColor(198, 40, 40);
                     doc.line(margem + 3, y + 8, margem + larguraUtil - 3, y + 8);
+
                     if (metaRef) {
-                        doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.setTextColor(230, 81, 0);
+                        doc.setFontSize(9);
+                        doc.setFont("helvetica", "bold");
+                        doc.setTextColor(230, 81, 0);
                         doc.text("NIVEL MAIS PROXIMO - " + String(metaRef.nivel || 'PRATA'), margem + 5, y + 14);
+
                         doc.setFontSize(8.5);
-                        doc.setFont("helvetica", "normal"); doc.setTextColor(100, 100, 100);
+                        doc.setFont("helvetica", "normal");
+                        doc.setTextColor(100, 100, 100);
                         doc.text("Dias Trabalhados:", margem + 5, y + 21);
-                        doc.setFont("helvetica", "bold"); doc.setTextColor(0, 0, 0);
+                        doc.setFont("helvetica", "bold");
+                        doc.setTextColor(0, 0, 0);
                         doc.text(String(metaRef.dias), margem + 40, y + 21);
-                        doc.setFont("helvetica", "normal"); doc.setTextColor(100, 100, 100);
+
+                        doc.setFont("helvetica", "normal");
+                        doc.setTextColor(100, 100, 100);
                         doc.text("Meta do Nivel:", margem + 5, y + 28);
-                        doc.setFont("helvetica", "bold"); doc.setTextColor(0, 0, 0);
+                        doc.setFont("helvetica", "bold");
+                        doc.setTextColor(0, 0, 0);
                         doc.text(num(metaRef.metaTotal).toFixed(2) + " pontos", margem + 40, y + 28);
-                        doc.setFont("helvetica", "normal"); doc.setTextColor(100, 100, 100);
+
+                        doc.setFont("helvetica", "normal");
+                        doc.setTextColor(100, 100, 100);
                         doc.text("P. Final do Tecnico:", margem + 5, y + 35);
-                        doc.setFont("helvetica", "bold"); doc.setTextColor(0, 0, 0);
+                        doc.setFont("helvetica", "bold");
+                        doc.setTextColor(0, 0, 0);
                         doc.text(num(metaRef.pontuacaoFinal).toFixed(2) + " pontos", margem + 40, y + 35);
+
                         doc.setFillColor(255, 243, 224);
                         doc.roundedRect(margem + 3, y + 38, larguraUtil - 6, 7, 1, 1, 'F');
-                        doc.setFont("helvetica", "bold"); doc.setTextColor(230, 81, 0);
+                        doc.setFont("helvetica", "bold");
+                        doc.setTextColor(230, 81, 0);
                         doc.setFontSize(9);
                         doc.text("FALTARAM " + num(metaRef.faltou).toFixed(2) + " PONTOS", margem + 6, y + 43);
                         doc.setFontSize(8);
                         doc.text("(" + num(metaRef.metaTotal).toFixed(2) + " - " + num(metaRef.pontuacaoFinal).toFixed(2) + ")", pageWidth - margem - 6, y + 43, { align: "right" });
+
                         y += alturaNao + 5;
                     } else {
                         y += 20 + 5;
                     }
                 }
 
+                // ===== RODAPÉ =====
                 doc.setDrawColor(200, 200, 200);
                 doc.setLineWidth(0.3);
                 doc.line(margem, pageHeight - 12, pageWidth - margem, pageHeight - 12);
-                doc.setFontSize(7.5); doc.setTextColor(150, 150, 150);
+
+                doc.setFontSize(7.5);
+                doc.setTextColor(150, 150, 150);
                 doc.setFont("helvetica", "normal");
                 doc.text("Documento gerado em: " + dataAtual + " - Sistema de Gestao de Premios", pageWidth / 2, pageHeight - 7, { align: "center" });
 
-                doc.save('premio_' + String(colaborador.nome || 'colaborador').replace(/\s+/g, '_') + '.pdf');
+                // ===== SALVAR =====
+                const nomeArquivo = 'premio_' + String(colaborador.nome || 'colaborador')
+                    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                    .replace(/[^a-zA-Z0-9]+/g, '_') + '.pdf';
+
+                doc.save(nomeArquivo);
+                console.log('PDF gerado:', nomeArquivo);
+
             } catch (error) {
-                console.error(error);
-                alert('Erro ao gerar PDF: ' + error.message);
+                console.error('Erro ao gerar PDF:', error);
+                alert('Erro ao gerar PDF: ' + (error.message || error));
             }
         }
 
