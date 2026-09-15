@@ -15,6 +15,11 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
         }
 
         .container {
@@ -76,6 +81,10 @@
             font-weight: 600;
             color: #1a237e;
             transition: all 0.2s;
+            -webkit-user-select: text;
+            -moz-user-select: text;
+            -ms-user-select: text;
+            user-select: text;
         }
         .cpf-input:focus {
             outline: none;
@@ -430,6 +439,168 @@
             margin-top: 8px;
             text-align: center;
         }
+
+        /* ============================================================
+           PROTEÇÃO CONTRA PRINT — OVERLAY E BLUR
+           ============================================================ */
+        #printOverlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(10, 10, 30, 0.92);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            z-index: 99999;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.25s ease;
+            pointer-events: all;
+        }
+
+        .print-overlay-content {
+            text-align: center;
+            color: white;
+            padding: 30px 40px;
+            max-width: 500px;
+        }
+
+        .print-overlay-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            animation: pulseLock 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulseLock {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.1); opacity: 0.8; }
+        }
+
+        .print-overlay-content h2 {
+            font-size: 1.6rem;
+            font-weight: 700;
+            margin-bottom: 12px;
+            letter-spacing: 0.5px;
+        }
+
+        .print-overlay-content p {
+            font-size: 0.95rem;
+            color: rgba(255, 255, 255, 0.85);
+            line-height: 1.5;
+        }
+
+        body.screen-blurred {
+            overflow: hidden;
+        }
+
+        body.screen-blurred::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(10, 10, 30, 0.95);
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            z-index: 99998;
+            pointer-events: all;
+        }
+
+        body.screen-blurred::after {
+            content: '🔒 Tela ocultada — clique para continuar';
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 1.1rem;
+            font-weight: 600;
+            z-index: 99999;
+            text-align: center;
+            padding: 20px 30px;
+            background: rgba(26, 35, 126, 0.9);
+            border-radius: 12px;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+
+        input, textarea {
+            -webkit-user-select: text;
+            -moz-user-select: text;
+            -ms-user-select: text;
+            user-select: text;
+        }
+
+        img {
+            -webkit-user-drag: none;
+            user-drag: none;
+            pointer-events: none;
+        }
+
+        @media print {
+            body * {
+                display: none !important;
+                visibility: hidden !important;
+            }
+            body::after {
+                content: '🔒 Impressão não permitida - Documento confidencial';
+                display: block !important;
+                visibility: visible !important;
+                font-size: 24px;
+                color: #c62828;
+                text-align: center;
+                margin-top: 40vh;
+                font-family: sans-serif;
+            }
+        }
+
+        /* ============================================================
+           WATERMARK DINÂMICO COM CPF DO USUÁRIO
+           ============================================================ */
+        #watermarkLayer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            z-index: 9000;
+            display: none;
+            overflow: hidden;
+            opacity: 0.09;
+            user-select: none;
+        }
+
+        #watermarkLayer.ativo {
+            display: block;
+        }
+
+        .watermark-item {
+            position: absolute;
+            color: #1a237e;
+            font-family: 'Inter', Arial, sans-serif;
+            font-weight: 700;
+            font-size: 13px;
+            letter-spacing: 1.5px;
+            white-space: nowrap;
+            transform: rotate(-28deg);
+            transform-origin: center;
+            pointer-events: none;
+            user-select: none;
+        }
+
+        @media (max-width: 700px) {
+            #watermarkLayer { opacity: 0.11; }
+            .watermark-item { font-size: 11px; letter-spacing: 1px; }
+        }
+
+        @media print {
+            #watermarkLayer { display: block !important; opacity: 0.15; }
+        }
     </style>
 </head>
 <body>
@@ -523,6 +694,9 @@
             Sistema de Gestão de Prêmios - Dados atualizados periodicamente
         </div>
     </div>
+
+    <!-- Camada do watermark dinâmico -->
+    <div id="watermarkLayer"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -1080,6 +1254,7 @@
 
         function voltarLogin() {
             colaboradorAtual = null;
+            removerWatermark();
             document.getElementById('cpfInput').value = '';
             document.getElementById('loginError').classList.remove('show');
             document.getElementById('telaLogin').classList.remove('hidden');
@@ -1423,10 +1598,73 @@
             document.getElementById('telaRelatorio').classList.remove('hidden');
 
             window.scrollTo({ top: 0, behavior: 'smooth' });
+
+            // === WATERMARK DINÂMICO ===
+            gerarWatermark(colaborador.cpf);
         }
 
         /* ============================================================
-           PDF — VERSÃO CORRIGIDA
+           WATERMARK DINÂMICO COM CPF DO USUÁRIO
+           ============================================================ */
+        function gerarWatermark(cpf) {
+            const layer = document.getElementById('watermarkLayer');
+            if (!layer) return;
+
+            layer.innerHTML = '';
+            layer.classList.remove('ativo');
+
+            if (!cpf) return;
+
+            const cpfFormatado = formatarCPF(cpf);
+            const agora = new Date();
+            const dataHora = agora.toLocaleDateString('pt-BR') + ' ' +
+                            agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            const textoCompleto = 'CPF: ' + cpfFormatado + ' • ' + dataHora;
+
+            const largura = window.innerWidth;
+            const altura = window.innerHeight;
+
+            const espacamentoX = 320;
+            const espacamentoY = 180;
+
+            const colunas = Math.ceil(largura / espacamentoX) + 1;
+            const linhas = Math.ceil(altura / espacamentoY) + 1;
+
+            for (let i = 0; i < colunas; i++) {
+                for (let j = 0; j < linhas; j++) {
+                    const item = document.createElement('div');
+                    item.className = 'watermark-item';
+                    item.textContent = textoCompleto;
+                    const offsetX = (j % 2 === 0) ? 0 : espacamentoX / 2;
+                    item.style.left = (i * espacamentoX + offsetX) + 'px';
+                    item.style.top = (j * espacamentoY) + 'px';
+                    layer.appendChild(item);
+                }
+            }
+
+            layer.classList.add('ativo');
+        }
+
+        function removerWatermark() {
+            const layer = document.getElementById('watermarkLayer');
+            if (layer) {
+                layer.innerHTML = '';
+                layer.classList.remove('ativo');
+            }
+        }
+
+        let _watermarkResizeTimer = null;
+        window.addEventListener('resize', function() {
+            clearTimeout(_watermarkResizeTimer);
+            _watermarkResizeTimer = setTimeout(function() {
+                if (colaboradorAtual && colaboradorAtual.cpf) {
+                    gerarWatermark(colaboradorAtual.cpf);
+                }
+            }, 250);
+        });
+
+        /* ============================================================
+           PDF — VERSÃO CORRIGIDA COM WATERMARK
            ============================================================ */
         function baixarPDF() {
             if (!colaboradorAtual) {
@@ -1438,7 +1676,6 @@
 
         function gerarPDF(colaborador) {
             try {
-                // Verifica se a lib carregou
                 if (!window.jspdf || !window.jspdf.jsPDF) {
                     alert('Biblioteca de PDF ainda não carregou. Aguarde alguns segundos e tente novamente.');
                     return;
@@ -1505,10 +1742,8 @@
                 const x2 = margem + larguraCard + gap;
                 const x3 = margem + (larguraCard + gap) * 2;
 
-                // --- CARD 1: RETRABALHO ---
                 doc.setFillColor(255, 255, 255);
                 doc.setDrawColor(224, 231, 255);
-                doc.setLineWidth(0.2);
                 doc.roundedRect(x1, y, larguraCard, alturaCard, 2, 2, 'FD');
 
                 doc.setFontSize(9);
@@ -1532,7 +1767,6 @@
                     doc.setFont("helvetica", "normal");
                     doc.setTextColor(100, 116, 139);
                     doc.text(linha[0], x1 + 3, yLinha);
-
                     doc.setFont("helvetica", "bold");
                     if (linha[0] === "Descontados" && retrab.descontados > 0) {
                         doc.setTextColor(198, 40, 40);
@@ -1542,7 +1776,6 @@
                     doc.text(linha[1], x1 + larguraCard - 3, yLinha, { align: "right" });
                 });
 
-                // --- CARD 2: PRODUÇÃO ---
                 doc.setFillColor(255, 255, 255);
                 doc.setDrawColor(224, 231, 255);
                 doc.roundedRect(x2, y, larguraCard, alturaCard, 2, 2, 'FD');
@@ -1573,7 +1806,6 @@
                     doc.text(linha[1], x2 + larguraCard - 3, yLinha, { align: "right" });
                 });
 
-                // --- CARD 3: RESULTADOS ---
                 doc.setFillColor(255, 255, 255);
                 doc.setDrawColor(224, 231, 255);
                 doc.roundedRect(x3, y, larguraCard, alturaCard, 2, 2, 'FD');
@@ -1933,6 +2165,32 @@
                     }
                 }
 
+                // ===== WATERMARK NO PDF =====
+                try {
+                    const cpfUser = formatarCPF(colaborador.cpf || '');
+                    const dataHoraPDF = new Date().toLocaleString('pt-BR');
+                    const marcaTexto = 'CPF: ' + cpfUser + ' • ' + dataHoraPDF;
+
+                    doc.setTextColor(220, 220, 230);
+                    doc.setFontSize(9);
+                    doc.setFont("helvetica", "bold");
+
+                    const posicoes = [];
+                    const passoX = 70;
+                    const passoY = 50;
+                    for (let px = 10; px < pageWidth; px += passoX) {
+                        for (let py = 30; py < pageHeight; py += passoY) {
+                            posicoes.push({ x: px, y: py });
+                        }
+                    }
+
+                    posicoes.forEach(p => {
+                        doc.text(marcaTexto, p.x, p.y, { angle: 30 });
+                    });
+                } catch (e) {
+                    console.warn('Não foi possível aplicar watermark no PDF:', e);
+                }
+
                 // ===== RODAPÉ =====
                 doc.setDrawColor(200, 200, 200);
                 doc.setLineWidth(0.3);
@@ -2035,6 +2293,169 @@
 
             window.open('https://wa.me/55' + colaborador.whatsapp + '?text=' + encodeURIComponent(mensagem), '_blank');
         }
+
+        /* ============================================================
+           PROTEÇÃO CONTRA PRINT / CAPTURA DE TELA
+           ============================================================ */
+        (function protecaoPrint() {
+            'use strict';
+
+            function mostrarBloqueio(msg) {
+                let overlay = document.getElementById('printOverlay');
+                if (!overlay) {
+                    overlay = document.createElement('div');
+                    overlay.id = 'printOverlay';
+                    overlay.innerHTML = `
+                        <div class="print-overlay-content">
+                            <div class="print-overlay-icon">🔒</div>
+                            <h2>Captura bloqueada</h2>
+                            <p>${msg || 'Esta ação não é permitida por questões de privacidade dos dados.'}</p>
+                        </div>
+                    `;
+                    document.body.appendChild(overlay);
+                } else {
+                    const p = overlay.querySelector('p');
+                    if (p) p.textContent = msg || 'Esta ação não é permitida por questões de privacidade dos dados.';
+                }
+
+                overlay.style.display = 'flex';
+                overlay.style.opacity = '1';
+
+                clearTimeout(window.__printOverlayTimer);
+                window.__printOverlayTimer = setTimeout(() => {
+                    overlay.style.opacity = '0';
+                    setTimeout(() => { overlay.style.display = 'none'; }, 300);
+                }, 2000);
+            }
+
+            document.addEventListener('keydown', function(e) {
+                const key = (e.key || '').toLowerCase();
+
+                if (e.key === 'PrintScreen' || e.code === 'PrintScreen') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    try {
+                        if (navigator.clipboard && navigator.clipboard.writeText) {
+                            navigator.clipboard.writeText('').catch(() => {});
+                        }
+                    } catch (_) {}
+                    mostrarBloqueio('Captura de tela detectada e bloqueada.');
+                    return false;
+                }
+
+                if (e.ctrlKey && key === 'p') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    mostrarBloqueio('Impressão não permitida.');
+                    return false;
+                }
+
+                if (e.ctrlKey && key === 's') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    mostrarBloqueio('Salvamento não permitido.');
+                    return false;
+                }
+
+                if (e.ctrlKey && e.shiftKey && key === 's') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    mostrarBloqueio('Captura de tela não permitida.');
+                    return false;
+                }
+
+                if (e.shiftKey && e.metaKey && key === 's') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    mostrarBloqueio('Captura de tela não permitida.');
+                    return false;
+                }
+
+                if (
+                    (e.ctrlKey && e.shiftKey && (key === 'i' || key === 'j' || key === 'c')) ||
+                    e.key === 'F12' ||
+                    (e.ctrlKey && key === 'u')
+                ) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    mostrarBloqueio('Ferramentas de desenvolvedor bloqueadas.');
+                    return false;
+                }
+            }, true);
+
+            document.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+                return false;
+            });
+
+            document.addEventListener('dragstart', function(e) {
+                e.preventDefault();
+                return false;
+            });
+
+            document.addEventListener('selectstart', function(e) {
+                const tag = (e.target && e.target.tagName) ? e.target.tagName.toUpperCase() : '';
+                if (tag !== 'INPUT' && tag !== 'TEXTAREA') {
+                    e.preventDefault();
+                    return false;
+                }
+            });
+
+            let blurTimeout = null;
+
+            window.addEventListener('blur', function() {
+                blurTimeout = setTimeout(() => {
+                    document.body.classList.add('screen-blurred');
+                }, 150);
+            });
+
+            window.addEventListener('focus', function() {
+                clearTimeout(blurTimeout);
+                document.body.classList.remove('screen-blurred');
+            });
+
+            document.addEventListener('visibilitychange', function() {
+                if (document.hidden) {
+                    document.body.classList.add('screen-blurred');
+                } else {
+                    document.body.classList.remove('screen-blurred');
+                }
+            });
+
+            if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+                navigator.mediaDevices.getDisplayMedia = function() {
+                    mostrarBloqueio('Compartilhamento de tela não permitido.');
+                    return Promise.reject(new Error('Compartilhamento de tela bloqueado.'));
+                };
+            }
+
+            console.log(
+                '%c⚠️ AVISO DE SEGURANÇA',
+                'color:#c62828;font-size:16px;font-weight:bold;'
+            );
+            console.log(
+                '%cEsta página contém dados confidenciais. Tentativas de captura, cópia ou compartilhamento são registradas e bloqueadas.',
+                'color:#c62828;font-size:12px;'
+            );
+
+            document.addEventListener('copy', function(e) {
+                const tag = (e.target && e.target.tagName) ? e.target.tagName.toUpperCase() : '';
+                if (tag !== 'INPUT' && tag !== 'TEXTAREA') {
+                    e.preventDefault();
+                    mostrarBloqueio('Cópia de conteúdo não permitida.');
+                    return false;
+                }
+            });
+
+            document.addEventListener('cut', function(e) {
+                const tag = (e.target && e.target.tagName) ? e.target.tagName.toUpperCase() : '';
+                if (tag !== 'INPUT' && tag !== 'TEXTAREA') {
+                    e.preventDefault();
+                    return false;
+                }
+            });
+
+        })();
 
         /* ============================================================
            MÁSCARA CPF + ENTER
