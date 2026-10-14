@@ -1861,11 +1861,7 @@
         }
 
         /* ============================================================
-           PROCESSAMENTO DA ABA CONCLUIDAS
-           Colunas:
-             L (11) - Tecnico que encerrou (produção)
-             Y (24) - Tecnico original (retrabalho)
-             Z (25) - Protocolo original
+           PROCESSAMENTO DA ABA CONCLUIDAS  (CORRIGIDO)
            ============================================================ */
         function processarConcluidas(workbook) {
             const sheetName = encontrarGuia(workbook, ['concluidas', 'concluídas']);
@@ -1898,36 +1894,62 @@
                 return -1;
             }
 
+            // Colunas fixas (fallback)
             const colProtocolo = acharColuna(['protocolo']) !== -1 ? acharColuna(['protocolo']) : 0;
             const colCliente = acharColuna(['cliente', 'nome_cliente', 'nome cliente']) !== -1 ? acharColuna(['cliente', 'nome_cliente', 'nome cliente']) : 1;
             const colTipo = acharColuna(['tipo', 'solicitacao', 'solicitação', 'servico', 'serviço']) !== -1 ? acharColuna(['tipo', 'solicitacao', 'solicitação', 'servico', 'serviço']) : 2;
             const colData = acharColuna(['data_primeiro_relato_encerramento', 'data_encerramento', 'encerramento', 'data']) !== -1 ? acharColuna(['data_primeiro_relato_encerramento', 'data_encerramento', 'encerramento', 'data']) : 3;
             const colStatus = acharColuna(['status']) !== -1 ? acharColuna(['status']) : 4;
-            const colTecnicoProd = 11;  // L
-            const colTecnicoRetrab = 24; // Y
-            const colProtOriginal = 25;  // Z
+
+            // 🔥 CORREÇÃO: colunas de técnico e protocolo original (Y e Z) - mapeia pelo cabeçalho
+            let colTecnicoProd = 11;  // L (fallback)
+            let colTecnicoRetrab = 24; // Y (fallback)
+            let colProtOriginal = 25;  // Z (fallback)
+
+            const idxTecProdCab = acharColuna(['tecnico_producao', 'técnico_produção', 'tecnico producao', 'técnico produção']);
+            if (idxTecProdCab !== -1) colTecnicoProd = idxTecProdCab;
+
+            const idxTecRetrabCab = acharColuna(['tecnico_original', 'técnico_original', 'tecnico original', 'técnico original']);
+            if (idxTecRetrabCab !== -1) colTecnicoRetrab = idxTecRetrabCab;
+
+            const idxProtOrigCab = acharColuna(['protocolo_original', 'protocolo original']);
+            if (idxProtOrigCab !== -1) colProtOriginal = idxProtOrigCab;
 
             const resultado = [];
             for (let i = linhaCabecalho + 1; i < dados.length; i++) {
                 const linha = dados[i];
                 if (!linha || linha.length < 5) continue;
 
-                const status = (linha[colStatus] || '').toString();
-                // 🔥 CORREÇÃO: Filtra apenas o que está "Encerrado" ou "Concluído"
-                if (status && !status.toLowerCase().includes('encerr') && !status.toLowerCase().includes('conclu')) continue;
+                const status = (linha[colStatus] || '').toString().trim();
+
+                // 🔥 CORREÇÃO: filtra apenas se status for explicitamente algo diferente de encerrado/concluído
+                // Se status for vazio, ainda consideramos (pode ser que não tenha status preenchido)
+                if (status) {
+                    const statusLower = status.toLowerCase();
+                    const ehEncerrado = statusLower.includes('encerr') ||
+                                        statusLower.includes('conclu') ||
+                                        statusLower.includes('finaliz') ||
+                                        statusLower.includes('fechado');
+                    if (!ehEncerrado) continue;
+                }
 
                 const dataEncerramento = parseDataExcel(linha[colData]);
                 if (!dataEncerramento) continue;
+
+                // 🔥 CORREÇÃO: captura técnico de produção (L), técnico original (Y) e protocolo original (Z)
+                const tecnicoProducao = String(linha[colTecnicoProd] || '').trim();
+                const tecnicoOriginal = String(linha[colTecnicoRetrab] || '').trim();
+                const protocoloOriginal = String(linha[colProtOriginal] || '').trim();
 
                 resultado.push({
                     protocolo: String(linha[colProtocolo] || '').trim(),
                     cliente: String(linha[colCliente] || '').trim(),
                     tipoSolicitacao: String(linha[colTipo] || '').trim(),
                     dataEncerramento: dataEncerramento,
-                    tecnicoProducao: String(linha[colTecnicoProd] || '').trim(),
-                    tecnicoOriginal: String(linha[colTecnicoRetrab] || '').trim(),
-                    protocoloOriginal: String(linha[colProtOriginal] || '').trim(),
-                    status: status.trim()
+                    tecnicoProducao: tecnicoProducao,
+                    tecnicoOriginal: tecnicoOriginal,
+                    protocoloOriginal: protocoloOriginal,
+                    status: status
                 });
             }
             return resultado;
@@ -2857,9 +2879,17 @@
             retrabalhoPorDia = {};
             totaisPorTipo = {};
 
-            if (!dadosConcluidas || dadosConcluidas.length === 0) return;
+            if (!dadosConcluidas || dadosConcluidas.length === 0) {
+                console.warn('⚠️ Nenhum dado na aba CONCLUIDAS');
+                return;
+            }
 
             const nomeColaborador = colaborador.nome;
+            console.log('🔍 Calculando produção para:', nomeColaborador);
+            console.log('📋 Total de registros CONCLUIDAS:', dadosConcluidas.length);
+
+            let contProd = 0;
+            let contRetrab = 0;
 
             for (const item of dadosConcluidas) {
                 const dataEncer = item.dataEncerramento;
@@ -2877,6 +2907,7 @@
                             tipo: tipoClassif
                         });
                         totaisPorTipo[tipoClassif] = (totaisPorTipo[tipoClassif] || 0) + 1;
+                        contProd++;
                     }
                 }
 
@@ -2888,8 +2919,12 @@
                         protocoloOriginal: item.protocoloOriginal || item.protocolo,
                         protocolo: item.protocolo
                     });
+                    contRetrab++;
                 }
             }
+
+            console.log('📊 Produção contabilizada:', contProd);
+            console.log('📊 Retrabalhos contabilizados:', contRetrab);
         }
 
         function renderizarTotaisPorTipo() {
